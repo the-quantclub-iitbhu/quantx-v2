@@ -231,9 +231,11 @@ app.post('/api/admin/login', (req, res) => {
   res.json({ success: password === process.env.ADMIN_PASSWORD });
 });
 
+app.use(express.static(path.join(__dirname, 'public')));
+
 // ── Page routes ──
 app.get('/', (req, res) => {
-  res.redirect('/participant');
+  res.sendFile(path.join(__dirname, 'public', 'participant.html'));
 });
 
 app.get('/participant', (req, res) => {
@@ -251,8 +253,6 @@ app.get('/admin', (req, res) => {
 app.get('/admin.html', (req, res) => {
   res.redirect('/admin');
 });
-
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ── ADMIN: start round (only needs roundNumber now) ──
 app.post('/api/admin/start-round', async (req, res) => {
