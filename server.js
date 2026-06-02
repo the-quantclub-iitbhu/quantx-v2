@@ -122,9 +122,9 @@ async function getRoundsSheetName() {
   });
   const titles = (meta.data.sheets || []).map(s => s.properties.title || '');
   const normalize = title => title.trim().toLowerCase();
-  const expected = 'rounds';
-  const exact = titles.find(t => normalize(t) === expected);
-  const fuzzy = titles.find(t => normalize(t).includes(expected));
+  const expectedNames = ['rounds', 'round'];
+  const exact = titles.find(t => expectedNames.includes(normalize(t)));
+  const fuzzy = titles.find(t => expectedNames.some(exp => normalize(t).includes(exp)));
   if (exact) {
     roundsSheetNameCache = exact;
   } else if (fuzzy) {
@@ -139,16 +139,31 @@ async function getRoundsSheetName() {
 
 async function fetchRoundData(roundNumber) {
   const sheets = await getSheets();
-  const sheetName = await getRoundsSheetName();
-  // Row 1 = headers, Round 1 = Row 2, Round N = Row N+1
+  let sheetName = await getRoundsSheetName();
   const rowIndex = parseInt(roundNumber, 10) + 1;
-  const safeSheetName = sheetName.replace(/'/g, "''");
-  const range = `'${safeSheetName}'!A${rowIndex}:G${rowIndex}`;
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range
-  });
-  const rawRow = (res.data.values || [[]])[0];
+  const tryRange = async name => {
+    const safeName = name.replace(/'/g, "''");
+    const range = `'${safeName}'!A${rowIndex}:G${rowIndex}`;
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range
+    });
+    return { range, rawRow: (res.data.values || [[]])[0] };
+  };
+
+  let result;
+  try {
+    result = await tryRange(sheetName);
+  } catch (err) {
+    if (sheetName.toLowerCase() !== 'rounds') {
+      result = await tryRange('Rounds');
+      sheetName = 'Rounds';
+    } else {
+      throw err;
+    }
+  }
+
+  const { range, rawRow } = result;
   const row = rawRow.concat(Array(7).fill('')).slice(0, 7);
   const currentPrice = parseFloat(row[3]);
   const futurePrice = parseFloat(row[4]);
@@ -163,13 +178,13 @@ async function fetchRoundData(roundNumber) {
     throw new Error(`Invalid direction for round ${roundNumber} in sheet "${sheetName}" at ${range}: direction='${row[6]}'`);
   }
   return {
-    roundNo:           parseInt(row[0], 1),
+    roundNo:           parseInt(row[0], 10),
     stockName:         row[1],
     ticker:            row[2],
-    currentPrice:      parseFloat(row[3]),
-    futurePrice:       parseFloat(row[4]),
+    currentPrice,
+    futurePrice,
     imageUrl:          row[5],
-    correctDirection:  row[6].trim().toUpperCase()
+    correctDirection:  direction
   };
 }
 
