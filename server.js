@@ -112,18 +112,58 @@ function getName(row) {
 }
 
 // ── Rounds sheet helper ──
+let roundsSheetNameCache = null;
+async function getRoundsSheetName() {
+  if (roundsSheetNameCache) return roundsSheetNameCache;
+  const sheets = await getSheets();
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId: SHEET_ID,
+    fields: 'sheets.properties.title'
+  });
+  const titles = (meta.data.sheets || []).map(s => s.properties.title || '');
+  const normalize = title => title.trim().toLowerCase();
+  const expected = 'rounds';
+  const exact = titles.find(t => normalize(t) === expected);
+  const fuzzy = titles.find(t => normalize(t).includes(expected));
+  if (exact) {
+    roundsSheetNameCache = exact;
+  } else if (fuzzy) {
+    roundsSheetNameCache = fuzzy;
+  } else if (titles.length === 1) {
+    roundsSheetNameCache = titles[0];
+  } else {
+    throw new Error(`Rounds sheet not found. Available sheets: ${titles.join(', ')}`);
+  }
+  return roundsSheetNameCache;
+}
+
 async function fetchRoundData(roundNumber) {
   const sheets = await getSheets();
+  const sheetName = await getRoundsSheetName();
   // Row 1 = headers, Round 1 = Row 2, Round N = Row N+1
-  const rowIndex = parseInt(roundNumber) + 1;
+  const rowIndex = parseInt(roundNumber, 10) + 1;
+  const safeSheetName = sheetName.replace(/'/g, "''");
+  const range = `'${safeSheetName}'!A${rowIndex}:G${rowIndex}`;
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: `Rounds!A${rowIndex}:G${rowIndex}`
+    range
   });
-  const row = (res.data.values || [[]])[0];
-  if (!row || row.length < 7) throw new Error(`Round ${roundNumber} data not found in Rounds sheet`);
+  const rawRow = (res.data.values || [[]])[0];
+  const row = rawRow.concat(Array(7).fill('')).slice(0, 7);
+  const currentPrice = parseFloat(row[3]);
+  const futurePrice = parseFloat(row[4]);
+  const direction = String(row[6] || '').trim().toUpperCase();
+  if (!rawRow.length || !rawRow.some(cell => String(cell).trim() !== '')) {
+    throw new Error(`Round ${roundNumber} data not found in sheet "${sheetName}" at ${range}. Row returned: ${JSON.stringify(rawRow)}`);
+  }
+  if (Number.isNaN(currentPrice) || Number.isNaN(futurePrice)) {
+    throw new Error(`Invalid price values for round ${roundNumber} in sheet "${sheetName}" at ${range}: current='${row[3]}', future='${row[4]}'`);
+  }
+  if (!direction || !['BUY','SELL'].includes(direction)) {
+    throw new Error(`Invalid direction for round ${roundNumber} in sheet "${sheetName}" at ${range}: direction='${row[6]}'`);
+  }
   return {
-    roundNo:           parseInt(row[0]),
+    roundNo:           parseInt(row[0], 1),
     stockName:         row[1],
     ticker:            row[2],
     currentPrice:      parseFloat(row[3]),
@@ -305,7 +345,7 @@ app.post('/api/admin/start-round', async (req, res) => {
 
     res.json({ success: true, gameState });
   } catch (e) {
-    console.error('start-round error:', e.message);
+    console.error('start-round error:', e.message, e.errors || e);
     res.status(500).json({ success: false, message: e.message });
   }
 });
