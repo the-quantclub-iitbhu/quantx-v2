@@ -10,8 +10,13 @@ app.use(express.json());
 
 // ── Sheet IDs ──
 const SHEET_ID          = process.env.SHEET_ID;           // QuantX game sheet (has Rounds tab + Sheet1)
-const IIT_SHEET_ID      = '13-OVXf1Yd1FR5C5Mm9UMCDC9Vti63DwiosXBWoH7d9A';
-const EXTERNAL_SHEET_ID = '1V9828wR1Zx2_d5qxNnXyyzv44aImMR9ykBbE79shmlY';
+const IIT_SHEET_ID      = process.env.IIT_SHEET_ID;
+const EXTERNAL_SHEET_ID = process.env.EXTERNAL_SHEET_ID;
+
+if (!SHEET_ID || !IIT_SHEET_ID || !EXTERNAL_SHEET_ID) {
+  console.error('Missing required env vars: SHEET_ID, IIT_SHEET_ID, EXTERNAL_SHEET_ID');
+  process.exit(1);
+}
 
 // ── Google Sheets Auth ──
 function getAuth() {
