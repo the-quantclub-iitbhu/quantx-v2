@@ -7,7 +7,6 @@ const path = require('path');
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Sheet IDs ──
 const SHEET_ID          = process.env.SHEET_ID;           // QuantX game sheet (has Rounds tab + Sheet1)
@@ -226,6 +225,29 @@ app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
   res.json({ success: password === process.env.ADMIN_PASSWORD });
 });
+
+// ── Page routes ──
+app.get('/', (req, res) => {
+  res.redirect('/participant');
+});
+
+app.get('/participant', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'participant.html'));
+});
+
+app.get('/participant.html', (req, res) => {
+  res.redirect('/participant');
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/admin.html', (req, res) => {
+  res.redirect('/admin');
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ── ADMIN: start round (only needs roundNumber now) ──
 app.post('/api/admin/start-round', async (req, res) => {
